@@ -1,0 +1,50 @@
+.Header{
+    background-color: #ffc7e3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    align-content: center;
+    width: 70%;
+    margin: 100px auto 0 auto;
+    /* offers the solution to horizontal centering and vertical spacing.
+    margin set from top, right, bottom then left. */
+    color: #30254D;
+    border-radius: 2rem;
+}
+.Header h1{
+    font-style: italic;
+    text-decoration: underline;
+}
+.inputField{
+    display: flex;
+    justify-content: center;
+    flex-direction: row;
+    gap: 1.5rem;
+    background-color: white;
+    width: 70%;
+    margin:30px auto 0 auto;
+    padding: 15px;
+    border-radius: 1rem;
+}
+.inputField .input{
+    padding: 5px 15px;
+    border-radius: 1.5rem;
+    border: solid 1px #E3B965;
+    outline: none;
+}
+.inputField .input::placeholder{
+    font-style: italic;
+    color: rgb(196, 196, 196);
+}
+.inputField .addButton{
+    padding: 10px 20px;
+    color: white;
+    background: #4D45A8;
+    background: 
+    linear-gradient(90deg, rgba(77, 69, 168, 1) 32%,
+    rgba(107, 29, 77, 1) 70%, 
+    rgba(242, 225, 73, 1) 93%);
+    font-weight: bold;
+    border-radius: 1.5em;
+}

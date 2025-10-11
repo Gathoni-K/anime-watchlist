@@ -1,0 +1,13 @@
+.animeItem{
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    background-color: #F8EFF0;
+    padding: 10px;
+    border-radius: 1.5rem;
+}
+.animeInfo .button{
+    display: flex;
+    justify-content: flex-end;
+    gap: 2em;
+    cursor: pointer;
+}
