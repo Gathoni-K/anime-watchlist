@@ -1,6 +1,6 @@
 # AniTrack
 
-Anime Watchlist is a web app for anime enthusiasts to track the shows they want to watch. Users can search for anime, add them to their watchlist, and manage their progress.
+AniTrack is a web app for anime enthusiasts to track the shows they want to watch. Users can search for anime, add them to their watchlist, and manage their progress.
 
 ## Tech Stack
 - React
