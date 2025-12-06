@@ -1,16 +1,24 @@
-**Anime watchlist**
--Is basically a To-do app but for anime.
--Users are able to search for whatever anime they like and then it is added to their watchlist,
-they can also mark anime as completed or delete them.
+# Anime Watchlist
 
+Anime Watchlist is a web app for anime enthusiasts to track the shows they want to watch. Users can search for anime, add them to their watchlist, and manage their progress.
 
-Tech Stack: React, TS and CSS.
+## Tech Stack
+- React
+- TypeScript
+- CSS
 
-Features implemented:
-1.Add feature.
-2.Delete and mark as completed features.
-3.Fetching data from an API.
+## Key Features
+- **Search & Add:** Fetch anime data from a public API and add favorites to your watchlist.
+- **Manage List:** Delete anime entries easily.
+- **Responsive UI:** Clean, interactive design with focus on user experience.
 
+## In Progress
+- Mark anime as completed
+- Adding items manually
 
-This is an unfinished app, I am yet to implement the mark as completed functionality, and
-adding individual items, the UI is fine, logic a bit shaky.
+## What I Learned / Demonstrated
+- Fetching and managing API data in React
+- State management with TypeScript
+- Designing responsive and user-friendly interfaces
+
+This project demonstrates my **frontend development skills, API integration, and UI/UX design sense**, making it a strong example of building interactive web applications.
