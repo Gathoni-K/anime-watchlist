@@ -46,3 +46,83 @@
     npm install -D @vercel/node
 
 -This is done before creating the file.
+
+## Tool calling.
+
+-This is used whenever our AI Needs access to data from a third party service.
+
+-The generic template for this would be:
+
+    <!-- Define Interfaces. -->
+
+    export interface ToolDefinition {
+        name: string;
+        description: string;
+        inputSchema: Record<string, any>;
+        //usually a JSON schema object
+    }
+
+    <!-- Define what we send to the AI API -->
+    export interface AiRequest {
+        prompt?: string;
+        history?: any[];
+        toolsAvailable: ToolDefinition[];
+        newToolData?: any;
+    }
+
+    <!-- Defining what our response from the AI API is -->
+    export interface AiResponse {
+        reasonForStopping: 'I_NEED_A_TOOL' | 'FINISHED' | 'ERROR';
+        toolName?:string;
+        arguments?: Record<string, any>;
+        toolRequest?: any;
+        finalHumanReadableText?: string;
+    }
+
+    declare function callAiApi(request: AiRequest): Promise<AiResponse>;
+    declare function yourNormalFunction(args: Record<string, any>): Promise<any>;
+
+    export async function handleAiLogic(userPrompt: string) : Promise<string> {
+
+        const myTools: ToolDefinition[] = [
+            name: "get_data_from_somewhere",
+            description: "Explain exactly when the AI should use this",
+            inputSchema: {
+                type: "object",
+                properties: {
+                    param1: {type: "string" }
+                },
+                required: ["param1"]
+            }
+        ]
+    
+
+    let aiResponse: AiResponse = await callAiApi({
+        prompt: userPrompt,
+        toolsAvailable: myTools
+    });
+
+    if (aiResponse.reasonForStopping === 'I_NEED_A_TOOL') {
+        
+        const requestedTool = aiResponse.toolName;
+        const aiArguments = aiResponse.arguments;
+
+        let freshData: any;
+        //use a strict type here
+
+        if(requestedTool === "get_data_from_somewhere" && aiArguments) {
+            freshData = await normalFunction(aiArguments);
+        }
+
+    <!-- THE HANDOFF
+    -Call the AI API response a second time, passing the original history and the new data fetched -->
+        aiResponse = await callAiApi({
+            history: [userPrompt, aiReponse,toolRequest],
+            newToolData: freshData,
+            toolsAvailable: myTools
+        });
+    }
+
+    return aiReponse.finalHumanReadbaleText ?? 'Sorry, I lost my train of thought!';
+
+    }
