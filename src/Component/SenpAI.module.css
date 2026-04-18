@@ -1,0 +1,203 @@
+/* SenpaiChat.css */
+
+/* --- Styling Variables --- */
+:root {
+    --senpai-purple: #9333ea;
+    --senpai-magenta: #db2777;
+    --senpai-bg: #f3f4f6;
+    --senpai-user-bubble: #e9d5ff;
+    --senpai-user-text: #1f2937;
+    --senpai-ai-bubble: #ffffff;
+    --senpai-ai-text: #1f2937;
+    --senpai-shadow-subtle: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --senpai-shadow-main: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.senpai-container {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    z-index: 9999;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+/* --- The BIGGER & Better Glowy Button --- */
+.glowy-button {
+    width: 100px; /* Signficantly Bigger */
+    height: 100px; /* Signficantly Bigger */
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--senpai-purple), var(--senpai-magenta));
+    border: none;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow: var(--senpai-shadow-main);
+    animation: pulse-glow-v2 2.5s infinite;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    padding: 0;
+    line-height: 1.1;
+}
+
+/* Internal stack: Icon + Text */
+.btn-icon { font-size: 28px; }
+.btn-text { font-weight: 700; }
+
+.glowy-button:hover {
+    transform: scale(1.08) translateY(-3px);
+    box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.15), 0 15px 15px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* A more subtle, captivating pulse */
+@keyframes pulse-glow-v2 {
+    0% { box-shadow: 0 0 0 0 rgba(219, 39, 119, 0.8), var(--senpai-shadow-main); }
+    65% { box-shadow: 0 0 0 20px rgba(219, 39, 119, 0), var(--senpai-shadow-main); }
+    100% { box-shadow: 0 0 0 0 rgba(219, 39, 119, 0), var(--senpai-shadow-main); }
+}
+
+/* --- Refined Chat Window --- */
+.chat-window {
+    width: 380px; /* slightly wider */
+    height: 600px; /* slightly taller */
+    background: var(--senpai-bg);
+    border-radius: 20px; /* bigger radius */
+    box-shadow: var(--senpai-shadow-main);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 20px; /* space between chat and button if both open */
+}
+
+/* Glass Header with gradient */
+.chat-header {
+    background: linear-gradient(135deg, var(--senpai-purple), var(--senpai-magenta));
+    color: white;
+    padding: 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    font-size: 17px;
+    box-shadow: var(--senpai-shadow-subtle);
+}
+
+.close-button {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+}
+
+.close-button:hover { background: rgba(255, 255, 255, 0.4); }
+
+/* --- Messages Container --- */
+.chat-messages {
+    flex-grow: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,0,0,0.1) transparent;
+}
+
+/* Bubble Styling */
+.message {
+    max-width: 80%;
+    padding: 12px 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    box-shadow: var(--senpai-shadow-subtle);
+    position: relative;
+}
+
+/* Friendly Bubble Curves */
+.message.user {
+    background: var(--senpai-user-bubble);
+    color: var(--senpai-user-text);
+    align-self: flex-end;
+    border-radius: 18px 18px 4px 18px;
+}
+
+.message.ai {
+    background: var(--senpai-ai-bubble);
+    color: var(--senpai-ai-text);
+    align-self: flex-start;
+    border-radius: 18px 18px 18px 4px;
+}
+
+.typing-indicator {
+    font-size: 12px;
+    color: #6b7280;
+    align-self: flex-start;
+    padding-left: 10px;
+    font-style: italic;
+}
+
+/* --- Input Area --- */
+.chat-input-area {
+    display: flex;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.7); /* subtle glass effect */
+    backdrop-filter: blur(5px);
+    border-top: 1px solid #e5e7eb;
+}
+
+.chat-input-area input {
+    flex-grow: 1;
+    padding: 12px 18px;
+    border: 1px solid #d1d5db;
+    border-radius: 25px;
+    outline: none;
+    margin-right: 12px;
+    font-size: 14px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.chat-input-area input:focus {
+    border-color: var(--senpai-magenta);
+    box-shadow: 0 0 0 3px rgba(219, 39, 119, 0.1);
+}
+
+.chat-input-area input:disabled { background: #e5e7eb; }
+
+/* Simple, minimalist send button */
+.send-button {
+    background: linear-gradient(135deg, var(--senpai-purple), var(--senpai-magenta));
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 45px;
+    height: 45px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: transform 0.2s ease;
+    box-shadow: var(--senpai-shadow-subtle);
+}
+
+.send-button:disabled {
+    background: #d1d5db;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.send-button:not(:disabled):hover { transform: scale(1.1); }

@@ -5,6 +5,7 @@ import Input from './Component/Input';
 import MainWrapper from './Component/MainWrapper';  
 import type { Anime } from './types/anime';
 import { fetchAnime } from './api/jikanApi';
+import SenpAI from './Component/SenpAI';
 
 function App() {
   // const [loading, setLoading] = useState(boolean);
@@ -42,6 +43,7 @@ function App() {
     <>
       <Input onAddAnime={handleAddAnime}/>
       <MainWrapper animeList={animeList} onDeleteAnime={handleDeleteAnime}/>
+      <SenpAI />
     </>
   )
 }
