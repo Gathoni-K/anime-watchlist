@@ -1,45 +1,68 @@
-```markdown
 # AI AGENT SERVERLESS BLUEPRINT
 *(Originally created for ANITRACK 2.0 - SenpAI)*
 
-This document serves as a map for building an AI agent that requires access to third-party services (Tool Calling). It is designed for a frontend framework (like React) calling a Serverless backend.
+This document is a reusable map for wiring an AI agent into any project that needs Tool Calling (i.e., the AI fetches live data from a third-party service before answering). It covers a React frontend calling a Vercel Serverless backend.
 
-### Why Serverless Functions?
-Serverless functions are used as a backend to do specific tasks, mostly:
-1. **To hide secrets:** Keeping API Keys (like Gemini or Anthropic keys) out of the frontend browser.
-2. **Bypassing CORS errors:** Acting as a middleman, preventing the usual blockage by the browser when directly talking to third-party APIs.
-3. **Heavy lifting:** Offloading massive calculations or complex AI loops from the user's device.
+---
 
-### Setup
-Before creating the files, install the Vercel Node package:
+## Why Serverless Functions?
+
+Serverless functions act as a secure middleman between your frontend and AI APIs. They are used for three reasons:
+
+1. **Hiding secrets** — API keys (Gemini, Anthropic, etc.) never touch the browser.
+2. **Bypassing CORS** — the browser blocks direct calls to third-party APIs. The serverless function makes those calls on the server side, where CORS doesn't apply.
+3. **Heavy lifting** — complex AI loops and large data processing happen on the server, not the user's device.
+
+---
+
+## Setup
+
+Before creating any files, install the Vercel Node adapter:
+
 ```bash
 npm install -D @vercel/node
 ```
 
----
-
-## 📁 Project Architecture 
-
-To keep the codebase scalable, we split our logic into three distinct parts:
-1. **`types.ts` (The Rules):** Strict TypeScript definitions to avoid using `any`.
-2. **`api/tools/` (The Hands / Action Logic):** Contains tool schemas (advertisements for the AI) and the physical functions that fetch external data.
-3. **`api/agent.ts` (The Brain / AI Logic):** The serverless endpoint that manages the conversation loop, talks to the AI API, and hands data back and forth.
+Then install your chosen AI SDK (see the Provider Swap Guide below).
 
 ---
 
-## 1. Defining Interfaces (`api/types.ts`)
+## Project Architecture
+
+Split your logic into three distinct layers:
+
+```
+api/                        ← Vercel reads serverless functions from here (root level)
+  agent.ts                  ← THE BRAIN: manages the AI conversation loop
+  animeData.ts              ← THE HANDS: tool schema + fetch logic (rename per project)
+  types/
+    ai.ts                   ← THE RULES: TypeScript interfaces
+src/
+  components/
+    YourChatComponent.tsx   ← Frontend UI — calls /api/agent via fetch()
+```
+
+> **Critical:** Vercel's serverless functions must live in the **root-level `/api/` folder**, not inside `/src/api/`. If your files are in `src/api/`, Vercel will not find them and will throw confusing build errors.
+
+---
+
+## 1. Types (`api/types/ai.ts`)
 
 **Rule of thumb:** Never use `any`. Use strict interfaces for your own data, and `unknown` for unpredictable data coming from the AI.
 
-```typescript
-// api/types.ts
+**What stays the same across every project:** `ToolDefinition`, `AiRequest`, `AiResponse`.
 
-// ---------------------------------------------------------
-// A. GENERIC AI TYPES (Keep these for every project)
-// ---------------------------------------------------------
+**What you change per project:** `MyToolArgs` and `MyToolResult` — rename and redefine these to match the data your specific tool needs and returns.
+
+```typescript
+// api/types/ai.ts
+
+// ─────────────────────────────────────────────
+// A. GENERIC AI TYPES — keep these every project
+// ─────────────────────────────────────────────
 export interface ToolDefinition {
     name: string;
-    description: string; // The "advertisement" so the AI knows when to use it
+    description: string;
     inputSchema: {
         type: string;
         properties: Record<string, { type: string; description?: string }>;
@@ -49,29 +72,29 @@ export interface ToolDefinition {
 
 export interface AiRequest {
     prompt?: string;
-    history?: { role: string; content: string }[]; 
+    history?: { role: string; content: string }[];
     toolsAvailable: ToolDefinition[];
-    newToolData?: unknown; 
+    newToolData?: unknown;
 }
 
 export interface AiResponse {
     reasonForStopping: 'I_NEED_A_TOOL' | 'FINISHED' | 'ERROR';
     toolName?: string;
-    arguments?: Record<string, unknown>; // Unpredictable AI output is 'unknown'
+    arguments?: Record<string, unknown>; // unknown = safer than any for AI output
     toolRequest?: unknown;
     finalHumanReadableText?: string;
 }
 
-// ---------------------------------------------------------
-// B. PROJECT-SPECIFIC TYPES (Change these per project)
-// ---------------------------------------------------------
+// ─────────────────────────────────────────────
+// B. PROJECT-SPECIFIC TYPES — change these per project
+// ─────────────────────────────────────────────
 
-// What arguments does the tool need from the AI? (e.g., AnimeSearchArgs)
+// What arguments does the AI send to the tool?
 export interface MyToolArgs {
-    queryParameter: string; 
+    queryParameter: string;
 }
 
-// What does the tool return to the AI? (e.g., AnimeDetails)
+// What does the tool return back to the AI?
 export interface MyToolResult {
     dataField1: string;
     dataField2: number;
@@ -80,239 +103,428 @@ export interface MyToolResult {
 
 ---
 
-## 2. The Tool Folder (`api/tools/myTool.ts`)
+## 2. The Tool File (`api/myTool.ts`)
 
-This file contains the description the AI reads, and the actual execution logic. 
+This file has two jobs:
+- **The schema** — a description the AI reads to know *when* and *how* to call this tool.
+- **The execution function** — the actual code that fetches the real data.
 
-**Important:** The `description` field does *not* tell the AI how to behave. It tells the AI exactly what this tool does and under what specific conditions it should be called. Be highly descriptive.
+**What stays the same across every project:** the file structure (schema + execution function).
+
+**What you change per project:** the tool `name`, `description`, `parameters`/`inputSchema`, the argument types, and the fetch logic inside the execution function.
+
+> **Important:** The `description` field does not tell the AI *how to behave*. It tells the AI *what this tool does* and *under what specific conditions it should be called*. Be highly descriptive.
+
+> **Provider note:** The tool schema format differs by AI provider. See the Provider Swap Guide below.
 
 ```typescript
-// api/tools/myTool.ts
-import { ToolDefinition, MyToolArgs, MyToolResult } from '../types';
+// api/myTool.ts — Generic template
+import type { MyToolArgs, MyToolResult } from './types/ai';
 
-// 1. The definition we send to the AI
-export const mySpecificTool: ToolDefinition = {
-    name: "fetch_external_data", // Strict, underscore-separated name
-    description: "Fetches specific data from X database. Use this ONLY when the user asks about Y.",
-    inputSchema: {
+// The schema — what you advertise to the AI
+// Gemini format uses `parameters`, Anthropic uses `input_schema`
+export const mySpecificTool = {
+    name: "fetch_external_data",        // underscore_separated
+    description: "Fetches X from Y database. Use this ONLY when the user asks about Z.",
+    parameters: {                        // ← Gemini format (change to input_schema for Anthropic)
         type: "object",
         properties: {
-            queryParameter: { 
-                type: "string", 
-                description: "The specific item to search for" 
+            queryParameter: {
+                type: "string",
+                description: "The specific item to search for"
             }
         },
         required: ["queryParameter"]
     }
 };
 
-// 2. The actual function that hits the third-party API/Database
+// The execution function — hits the real API or database
 export async function executeMyTool(args: MyToolArgs): Promise<MyToolResult> {
-    console.log(`Executing tool with arguments:`, args);
-    
-    // REPLACE THIS WITH ACTUAL FETCH LOGIC
-    // e.g., const response = await fetch(`https://api.example.com/data?q=${args.queryParameter}`);
-    
+    console.log(`[Tool] Executing with:`, args);
+
+    // REPLACE WITH YOUR ACTUAL FETCH LOGIC:
+    // const res = await fetch(`https://api.example.com/data?q=${args.queryParameter}`);
+    // const data = await res.json();
+
     return {
-        dataField1: "Example string data",
-        dataField2: 100
-    }; 
+        dataField1: "placeholder",
+        dataField2: 0
+    };
 }
 ```
 
 ---
 
-## 3. The Main API File (`api/agent.ts`)
+## 3. The Agent File (`api/agent.ts`)
 
-This is your serverless endpoint. It handles the POST request, initializes the AI, and manages the "handoff" loop if the AI requests a tool.
+This is your serverless endpoint. It handles incoming POST requests, runs the AI loop, and manages the tool "handoff" — sending the AI's tool request to your execution function, then sending the result back to the AI.
+
+**What stays the same across every project:** the Vercel handler structure, the `if (request.method !== 'POST')` guard, the try/catch, and the overall loop shape (initial call → check for tool use → handoff → return final text).
+
+**What you change per project:** the AI SDK, the model name, the system prompt, and the tool/argument names.
 
 ```typescript
-// api/agent.ts
+// api/agent.ts — Generic template (provider-agnostic pseudocode)
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { mySpecificTool, executeMyTool } from './tools/myTool';
-import { AiRequest, AiResponse, MyToolArgs, MyToolResult } from './types';
+import { mySpecificTool, executeMyTool } from './myTool';
+import type { MyToolArgs, MyToolResult } from './types/ai';
 
-// Placeholder for the actual SDK call (e.g., Gemini's generateContent)
-declare function callAiApi(request: AiRequest): Promise<AiResponse>;
+// Replace with your actual SDK initialisation
+const aiClient = initAiClient(process.env.YOUR_API_KEY!);
 
-// --- THE AI LOOP ---
 export async function handleAiLogic(userPrompt: string): Promise<string> {
-    
-    // 1. Equip the tools
-    const availableTools: ToolDefinition[] = [mySpecificTool];
 
-    // 2. Initial Call to AI
-    let aiResponse: AiResponse = await callAiApi({
-        prompt: userPrompt,
-        toolsAvailable: availableTools
+    // 1. Initial call to the AI
+    const firstResponse = await aiClient.chat({
+        model: "your-model-name",
+        systemPrompt: "You are a helpful assistant.",
+        tools: [mySpecificTool],
+        message: userPrompt
     });
 
-    // 3. Check if AI wants to use a tool
-    if (aiResponse.reasonForStopping === 'I_NEED_A_TOOL') {
-        
-        const requestedTool = aiResponse.toolName;
-        
-        // Safely cast the unknown AI arguments to our strict TypeScript interface
-        const aiArguments = aiResponse.arguments as unknown as MyToolArgs;
+    // 2. Did the AI request a tool?
+    const toolCall = firstResponse.toolCall;
 
-        // Strictly type the data we are about to fetch
-        let freshData: MyToolResult | null = null;
+    if (toolCall && toolCall.name === 'fetch_external_data') {
+        const aiArguments = toolCall.args as MyToolArgs;
 
-        // 4. Route to the correct tool execution function
-        if (requestedTool === "fetch_external_data" && aiArguments?.queryParameter) {
-            freshData = await executeMyTool(aiArguments);
-        }
+        // 3. Execute the tool
+        const freshData: MyToolResult = await executeMyTool(aiArguments);
 
-        // 5. THE HANDOFF: Send the fetched data back to the AI to formulate an answer
-        aiResponse = await callAiApi({
+        // 4. Handoff — send the tool result back to the AI
+        const finalResponse = await aiClient.chat({
+            model: "your-model-name",
+            tools: [mySpecificTool],
             history: [
                 { role: "user", content: userPrompt },
-                { role: "assistant", content: "Tool requested..." } // Mock history
+                { role: "assistant", content: firstResponse.raw }
             ],
-            newToolData: freshData,
-            toolsAvailable: availableTools
+            toolResult: {
+                name: 'fetch_external_data',
+                data: freshData
+            }
         });
+
+        return finalResponse.text ?? "Sorry, I lost my train of thought!";
     }
 
-    // 6. Return final text
-    return aiResponse.finalHumanReadableText ?? 'Sorry, an error occurred.';
+    // 5. No tool needed — return the direct answer
+    return firstResponse.text ?? "Sorry, I couldn't generate a response.";
 }
 
-// --- VERCEL ENDPOINT HANDLER ---
+// Vercel endpoint handler — this part never changes
 export default async function handler(
     request: VercelRequest,
     response: VercelResponse
 ) {
-    // Only allow POST requests
-    if (request.method !== 'POST'){
-        return response.status(405).json({error: 'Method not allowed' });
+    if (request.method !== 'POST') {
+        return response.status(405).json({ error: 'Method not allowed' });
     }
 
     try {
         const userPrompt = request.body.prompt;
-        // Access environment variables securely here
-        const aiApiKey = process.env.AI_API_KEY; 
+        if (!userPrompt) {
+            return response.status(400).json({ error: 'Missing prompt in request body' });
+        }
 
-        // Trigger the AI logic loop
         const finalAnswer = await handleAiLogic(userPrompt);
-        
-        // Send back to frontend
         return response.status(200).json({ text: finalAnswer });
-    }
-    catch (error) {
+
+    } catch (error) {
         console.error("Endpoint Error: ", error);
         return response.status(500).json({ error: 'Failed to generate response' });
     }
 }
-
 ```
 
--For claude AI, the implementation of the above template would be:
+---
 
-    import type { VercelRequest, VercelResponse } from '@vercel/node';
-    import Anthropic from '@anthropic-ai/sdk';
+## Provider Swap Guide
 
-    // 1. Import your actual specific anime logic and types
-    import { getAnimeDataTool, fetchAnimeData } from './animeData';
-    import { AnimeDetails, AnimeSearchArgs } from '../types/ai'; 
-    // (Notice we deleted AiRequest and AiResponse, we don't need them for Claude)
+The overall loop structure never changes. What changes per provider is: the SDK import, the client initialisation, the tool schema format, and how you read the tool call and final text from the response.
 
-    // Initialize the Claude Client
-    const anthropic = new Anthropic({
-        apiKey: process.env.ANTHROPIC_API_KEY, 
+### Gemini (Google) — Free tier available
+
+```bash
+npm install @google/generative-ai
+```
+
+```typescript
+// api/agent.ts
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { mySpecificTool, executeMyTool } from './myTool';
+import type { MyToolArgs, MyToolResult } from './types/ai';
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+
+export async function handleAiLogic(userPrompt: string): Promise<string> {
+    const model = genAI.getGenerativeModel({
+        model: "gemini-2.0-flash",
+        systemInstruction: "You are a helpful assistant.",
+        tools: [{ functionDeclarations: [mySpecificTool] }]
     });
 
-    // --- THE CLAUDE AI LOOP ---
-    export async function handleAiLogic(userPrompt: string): Promise<string> {
-    
-    // 1. Initial Call to Claude
+    const chat = model.startChat();
+    const result = await chat.sendMessage(userPrompt);
+    const response = result.response;
+
+    // Check for tool call
+    const functionCall = response.candidates?.[0]?.content?.parts?.[0]?.functionCall;
+
+    if (functionCall && functionCall.name === 'fetch_external_data') {
+        const aiArguments = functionCall.args as MyToolArgs;
+        const freshData: MyToolResult = await executeMyTool(aiArguments);
+
+        // Handoff
+        const finalResult = await chat.sendMessage([{
+            functionResponse: {
+                name: 'fetch_external_data',
+                response: freshData
+            }
+        }]);
+
+        return finalResult.response.text() || "Sorry, I lost my train of thought!";
+    }
+
+    return response.text() || "Sorry, I couldn't generate a response.";
+}
+```
+
+**Tool schema format for Gemini** — use `parameters`:
+```typescript
+export const mySpecificTool = {
+    name: "fetch_external_data",
+    description: "...",
+    parameters: {                   // ← Gemini uses `parameters`
+        type: "object",
+        properties: { queryParameter: { type: "string", description: "..." } },
+        required: ["queryParameter"]
+    }
+};
+```
+
+**Gemini free tier limits:**
+- `gemini-2.0-flash` has a per-minute and a daily request cap. If you hit it, wait until midnight Pacific Time for the daily quota to reset.
+- If you hit the per-minute cap, wait ~60 seconds and retry.
+
+---
+
+### Anthropic (Claude) — Paid only
+
+```bash
+npm install @anthropic-ai/sdk
+```
+
+```typescript
+// api/agent.ts
+import Anthropic from '@anthropic-ai/sdk';   // default import, NOT named { Anthropic }
+import { mySpecificTool, executeMyTool } from './myTool';
+import type { MyToolArgs, MyToolResult } from './types/ai';
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+
+export async function handleAiLogic(userPrompt: string): Promise<string> {
     const message = await anthropic.messages.create({
-        model: "claude-3-haiku-20240307", 
+        model: "claude-3-haiku-20240307",
         max_tokens: 1024,
+        system: "You are a helpful assistant.",
         messages: [{ role: "user", content: userPrompt }],
-        // 2. Use your actual tool import here
-        tools: [getAnimeDataTool] 
+        tools: [mySpecificTool as Anthropic.Tool]
     });
 
-    // 2. Check if Claude wants to use a tool
     if (message.stop_reason === 'tool_use') {
-        
-        // Find the specific block where Claude asked for the tool
         const toolUseBlock = message.content.find(block => block.type === 'tool_use');
-        
-        // Make sure the name matches the `name` you gave getAnimeDataTool
-        if (toolUseBlock && toolUseBlock.name === 'get_anime_data') {
-            
-            // Extract arguments and safely cast them to your Anime arguments
-            const aiArguments = toolUseBlock.input as unknown as AnimeSearchArgs;
-            
-            // 3. Execute your actual fetch function
-            const freshData: AnimeDetails = await fetchAnimeData(aiArguments);
 
-            // 4. THE HANDOFF: Send it all back to Claude
+        if (toolUseBlock && toolUseBlock.type === 'tool_use' && toolUseBlock.name === 'fetch_external_data') {
+            const aiArguments = toolUseBlock.input as unknown as MyToolArgs;
+            const freshData: MyToolResult = await executeMyTool(aiArguments);
+
+            // Handoff
             const finalResponse = await anthropic.messages.create({
                 model: "claude-3-haiku-20240307",
                 max_tokens: 1024,
-                tools: [getAnimeDataTool], // Pass the actual tool again
+                system: "You are a helpful assistant.",
+                tools: [mySpecificTool as Anthropic.Tool],
                 messages: [
                     { role: "user", content: userPrompt },
-                    { role: "assistant", content: message.content }, 
+                    { role: "assistant", content: message.content },
                     {
                         role: "user",
-                        content: [
-                            {
-                                type: "tool_result",
-                                tool_use_id: toolUseBlock.id,
-                                content: JSON.stringify(freshData)
-                            }
-                        ]
+                        content: [{
+                            type: "tool_result",
+                            tool_use_id: toolUseBlock.id,
+                            content: JSON.stringify(freshData)
+                        }]
                     }
                 ]
             });
 
-            // 5. Safely return the final text to keep TS happy
             const finalBlock = finalResponse.content[0];
-            return finalBlock.type === 'text' ? finalBlock.text : "Sorry, an error occurred.";
+            return finalBlock.type === 'text' ? finalBlock.text : "Sorry, I lost my train of thought!";
         }
     }
 
-    // 6. If Claude didn't need a tool, just return its normal answer safely
     const initialBlock = message.content[0];
-    return initialBlock.type === 'text' ? initialBlock.text : "Sorry, an error occurred.";
+    return initialBlock.type === 'text' ? initialBlock.text : "Sorry, I couldn't generate a response.";
+}
+```
+
+**Tool schema format for Anthropic** — use `input_schema`:
+```typescript
+export const mySpecificTool: Anthropic.Tool = {
+    name: "fetch_external_data",
+    description: "...",
+    input_schema: {                 // ← Anthropic uses `input_schema`
+        type: "object",
+        properties: { queryParameter: { type: "string", description: "..." } },
+        required: ["queryParameter"]
     }
+};
+```
 
-    // --- VERCEL ENDPOINT HANDLER ---
-    export default async function handler(
-        request: VercelRequest,
-        response: VercelResponse
-    ) {
-        if (request.method !== 'POST') return response.status(405).json({error: 'Method not allowed'});
-
-        try {
-            const finalAnswer = await handleAiLogic(request.body.prompt);
-            return response.status(200).json({ text: finalAnswer });
-        }
-        catch (error) {
-            console.error("Endpoint Error: ", error);
-            return response.status(500).json({ error: 'Failed to generate response' });
-        }
-    }
-
+> **Common Anthropic gotcha:** Always use the default import (`import Anthropic from '@anthropic-ai/sdk'`), not the named import (`import { Anthropic }`). The named import resolves to `undefined` and causes a cryptic esbuild error downstream.
 
 ---
 
-### 📝 Checklist for Using This Template in a New Project
-Whenever you copy this template for a new project, follow these steps to wire it up:
-1. [ ] Update your `.env` variables and ensure they match the names in `api/agent.ts`.
-2. [ ] In `types.ts`, replace `MyToolArgs` and `MyToolResult` with interfaces that match the actual data your new project needs.
-3. [ ] In `api/tools/`, rename the tool file, update the `name` (use underscores), and write a highly specific `description`.
-4. [ ] In `api/tools/`, write the actual `fetch()` or Database query inside the execution function.
-5. [ ] In `api/agent.ts`, replace the dummy `callAiApi` implementation with the actual SDK logic (Gemini, Claude, OpenAI, etc.).
+## 4. Connecting to the Frontend
 
+The frontend never talks to the AI directly. It only talks to your `/api/agent` endpoint. This keeps your API keys safe and avoids CORS errors.
 
-## CONNECTING TO THE FRONTEND
+**What stays the same across every project:** the `fetch()` call shape, the loading state pattern, and the message list structure.
 
+**What you change per project:** the component's UI, the placeholder text, and any project-specific message formatting.
 
+### Generic React Chat Component
 
+```tsx
+// src/components/AiChat.tsx
+import React, { useState } from 'react';
 
+interface Message {
+    role: 'user' | 'ai';
+    content: string;
+}
 
+export default function AiChat() {
+    const [messages, setMessages] = useState<Message[]>([
+        { role: 'ai', content: 'Hello! How can I help you today?' }  // ← change greeting
+    ]);
+    const [inputText, setInputText] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSend = async () => {
+        if (!inputText.trim() || isLoading) return;
+
+        const userMessage = inputText.trim();
+        setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+        setInputText('');
+        setIsLoading(true);
+
+        try {
+            const response = await fetch('/api/agent', {   // ← must match your api filename
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: userMessage }),
+            });
+
+            if (!response.ok) throw new Error('Network error');
+
+            const data = await response.json();
+            setMessages(prev => [...prev, { role: 'ai', content: data.text }]);
+
+        } catch (error) {
+            console.error("Fetch error:", error);
+            setMessages(prev => [...prev, {
+                role: 'ai',
+                content: 'Sorry, something went wrong. Please try again.'  // ← change error message
+            }]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') handleSend();
+    };
+
+    return (
+        <div>
+            <div>
+                {messages.map((msg, i) => (
+                    <div key={i} className={msg.role}>
+                        {msg.content}
+                    </div>
+                ))}
+                {isLoading && <div>AI is thinking...</div>}
+            </div>
+
+            <input
+                type="text"
+                value={inputText}
+                onChange={e => setInputText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={isLoading}
+                placeholder="Type your message..."
+            />
+            <button onClick={handleSend} disabled={isLoading || !inputText.trim()}>
+                Send
+            </button>
+        </div>
+    );
+}
+```
+
+### The Contract Between Frontend and Backend
+
+The frontend and backend communicate through a simple JSON contract. As long as both sides honour it, the UI and the AI logic are completely independent of each other.
+
+| Direction | Shape |
+|---|---|
+| Frontend → Backend | `POST /api/agent` with body `{ prompt: "user's message" }` |
+| Backend → Frontend | `200 OK` with body `{ text: "AI's response" }` |
+| Backend → Frontend (error) | `500` with body `{ error: "Failed to generate response" }` |
+
+The frontend reads `data.text`. The backend writes `response.status(200).json({ text: finalAnswer })`. Those two must always match.
+
+---
+
+## Environment Variables
+
+Store all API keys in a `.env` file at the project root. Never commit this file.
+
+```bash
+# .env
+GEMINI_API_KEY=your_key_here
+# or
+ANTHROPIC_API_KEY=your_key_here
+```
+
+If deploying to Vercel, also add them in **Vercel Dashboard → Your Project → Settings → Environment Variables**.
+
+---
+
+## Common Errors & What They Actually Mean
+
+| Error | Real Cause |
+|---|---|
+| `Expected identifier but found "}"` (esbuild) | A file you import doesn't exist at that path, or has a broken import of its own. Run `npx tsc --noEmit` for the real error location. |
+| `404 Not Found` on a model name | Your SDK version is too old and doesn't know the model. Run `npm install @google/generative-ai@latest` and retry. |
+| `429 Too Many Requests` | You hit the free tier rate limit. Wait ~60 seconds (per-minute cap) or until midnight Pacific Time (daily cap). |
+| `400 credit balance too low` | Your Anthropic account has no credits. Add credits at console.anthropic.com or switch to Gemini. |
+| `named import { Anthropic } resolves to undefined` | Use `import Anthropic from '@anthropic-ai/sdk'` (default import), not `{ Anthropic }`. |
+| Vercel can't find your API file | Your file is in `src/api/` but Vercel only reads from the root `/api/` folder. Move files to root `/api/`. |
+
+---
+
+## New Project Checklist
+
+When copying this blueprint to a new project:
+
+- [ ] Install `@vercel/node` and your chosen AI SDK
+- [ ] Create root-level `/api/` folder (not inside `/src/`)
+- [ ] Add your API key to `.env` and to Vercel Environment Variables
+- [ ] In `api/types/ai.ts`, rename `MyToolArgs` and `MyToolResult` to match your project's data
+- [ ] In your tool file, write a specific `description`, update the `name` (use underscores), and replace the placeholder fetch with your real API call
+- [ ] In `api/agent.ts`, update the model name, system prompt, and tool/argument names
+- [ ] In your React component, make sure `fetch('/api/your-filename')` matches your actual API filename
+- [ ] Make sure the frontend reads `data.text` and the backend writes `{ text: finalAnswer }`
